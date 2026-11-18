@@ -1,0 +1,30 @@
+/*
+ * Device Tree Source Fragment for Odroid-XU4 OGST (N64 Case) 2.4" TFT Display
+ *
+ * Controller: ILI9340 / ILI9341 over SPI1 (CON10 Header)
+ * Target: Samsung Exynos5422 / Odroid-XU4
+ */
+
+&spi_1 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	display@0 {
+		compatible = "ilitek,ili9340", "ilitek,ili9341";
+		reg = <0>;
+		spi-max-frequency = <32000000>;
+		rotate = <270>;
+		bgr;
+		fps = <30>;
+		buswidth = <8>;
+		reset-gpios = <&gpx1 5 0>;
+		dc-gpios    = <&gpx1 6 0>;
+		led-gpios   = <&gpx1 2 1>;
+
+		controller-data {
+			cs-gpio = <&gpa2 5 0>;
+			samsung,spi-feedback-delay = <0>;
+		};
+	};
+};

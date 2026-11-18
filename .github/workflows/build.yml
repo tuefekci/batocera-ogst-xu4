@@ -1,0 +1,168 @@
+name: Build Batocera OGST Display Driver & DTB
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: "Kernel version override (e.g. 6.6.56). Leave empty for auto-detection."
+        required: false
+        default: ""
+  schedule:
+    # Run every Monday at 03:00 UTC to check for upstream Batocera kernel bumps
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-linux-gnueabihf \
+            bison \
+            flex \
+            libssl-dev \
+            libelf-dev \
+            bc \
+            device-tree-compiler \
+            tar \
+            gzip \
+            curl \
+            jq
+
+      - name: Detect Batocera Odroid XU4 Kernel Version
+        id: detect_kernel
+        run: |
+          if [ -n "${{ github.event.inputs.kernel_version }}" ]; then
+            KVER="${{ github.event.inputs.kernel_version }}"
+            echo "[+] Using user-supplied kernel version: $KVER"
+          else
+            BOARD_CONF="https://raw.githubusercontent.com/batocera-linux/batocera.linux/master/configs/batocera-odroidxu4.board"
+            KVER=$(curl -sSL "$BOARD_CONF" | grep 'BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE' | cut -d '"' -f 2 || true)
+            if [ -z "$KVER" ]; then
+              KVER="6.6.56"
+              echo "[!] Failed to query upstream board config, falling back to: $KVER"
+            else
+              echo "[+] Detected upstream Batocera kernel version: $KVER"
+            fi
+          fi
+          echo "kernel_version=$KVER" >> $GITHUB_OUTPUT
+
+      - name: Download Linux Kernel Source
+        run: |
+          KVER="${{ steps.detect_kernel.outputs.kernel_version }}"
+          echo "[+] Fetching Linux kernel v${KVER}..."
+          curl -sSL "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${KVER}.tar.xz" | tar -xJ
+          mv linux-${KVER} linux
+
+      - name: Configure Kernel with Batocera Defconfig & FBTFT
+        run: |
+          cd linux
+          BASE_CONFIG="https://raw.githubusercontent.com/batocera-linux/batocera.linux/master/board/batocera/samsung/exynos5422/linux-defconfig.config"
+          FRAG_CONFIG="https://raw.githubusercontent.com/batocera-linux/batocera.linux/master/board/batocera/linux-defconfig-fragment.config"
+
+          echo "[+] Fetching Batocera defconfigs..."
+          curl -sSL "$BASE_CONFIG" -o .config
+          curl -sSL "$FRAG_CONFIG" >> .config
+
+          echo "[+] Enabling FBTFT drivers for OGST display..."
+          cat << 'EOF' >> .config
+          CONFIG_STAGING=y
+          CONFIG_FB_TFT=m
+          CONFIG_FB_TFT_ILI9340=m
+          CONFIG_FB_TFT_ILI9341=m
+          CONFIG_SPI=y
+          CONFIG_SPI_MASTER=y
+          CONFIG_SPI_S3C64XX=y
+          EOF
+
+          make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- olddefconfig
+
+      - name: Patch Device Tree for OGST Panel
+        run: |
+          DTS_FILE="linux/arch/arm/boot/dts/samsung/exynos5422-odroidxu4.dts"
+          echo "[+] Patching ${DTS_FILE} with OGST panel definition..."
+          cat dts/ogst-overlay.dtsi >> "$DTS_FILE"
+
+      - name: Compile Modules & Device Tree
+        run: |
+          cd linux
+          echo "[+] Compiling FBTFT modules..."
+          make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) modules_prepare
+          make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) M=drivers/staging/fbtft
+
+          echo "[+] Compiling Device Tree Blob..."
+          make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- samsung/exynos5422-odroidxu4.dtb
+
+      - name: Verify & Collect Build Artifacts
+        run: |
+          KVER="${{ steps.detect_kernel.outputs.kernel_version }}"
+          DIST_DIR="dist"
+          mkdir -p "$DIST_DIR"
+
+          # Verify files exist
+          test -f linux/drivers/staging/fbtft/fbtft.ko
+          test -f linux/drivers/staging/fbtft/fb_ili9340.ko
+          test -f linux/arch/arm/boot/dts/samsung/exynos5422-odroidxu4.dtb
+
+          cp linux/drivers/staging/fbtft/fbtft.ko "$DIST_DIR/"
+          cp linux/drivers/staging/fbtft/fb_ili9340.ko "$DIST_DIR/"
+          cp linux/arch/arm/boot/dts/samsung/exynos5422-odroidxu4.dtb "$DIST_DIR/"
+          cp scripts/ogst_display.py "$DIST_DIR/"
+          cp install.sh "$DIST_DIR/"
+          cp uninstall.sh "$DIST_DIR/"
+
+          tar -czvf "batocera-ogst-xu4-v${KVER}.tar.gz" -C "$DIST_DIR" .
+          cp "batocera-ogst-xu4-v${KVER}.tar.gz" "batocera-ogst-xu4-latest.tar.gz"
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: batocera-ogst-xu4-v${{ steps.detect_kernel.outputs.kernel_version }}
+          path: |
+            batocera-ogst-xu4-*.tar.gz
+            dist/exynos5422-odroidxu4.dtb
+            dist/fbtft.ko
+            dist/fb_ili9340.ko
+
+      - name: Create / Update GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.detect_kernel.outputs.kernel_version }}
+          name: "Batocera OGST Drivers (Kernel ${{ steps.detect_kernel.outputs.kernel_version }})"
+          body: |
+            Automated build of the OGST N64 front LCD driver and patched Device Tree for **Batocera Linux** on the **Odroid XU4**.
+
+            ### Assets Included
+            * `exynos5422-odroidxu4.dtb` (Enables SPI1 and binds the ILI9340 display)
+            * `fbtft.ko` & `fb_ili9340.ko` (Kernel display drivers)
+            * `ogst_display.py` (20-second idle telemetry + EmulationStation artwork renderer)
+            * `install.sh` & `uninstall.sh`
+
+            ### Quick 1-Command Install via SSH:
+            ```bash
+            curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
+            ```
+          draft: false
+          prerelease: false
+          files: |
+            batocera-ogst-xu4-v${{ steps.detect_kernel.outputs.kernel_version }}.tar.gz
+            batocera-ogst-xu4-latest.tar.gz
+            dist/exynos5422-odroidxu4.dtb
+            dist/fbtft.ko
+            dist/fb_ili9340.ko
+            install.sh
+            uninstall.sh

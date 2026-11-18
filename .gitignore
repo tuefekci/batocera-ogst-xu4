@@ -1,0 +1,20 @@
+# Build and artifact directories
+dist/
+build/
+*.tar.gz
+*.ko
+*.dtb
+*.o
+*.mod
+*.mod.c
+.tmp_versions/
+modules.order
+Module.symvers
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# OS specific
+.DS_Store
+Thumbs.db
