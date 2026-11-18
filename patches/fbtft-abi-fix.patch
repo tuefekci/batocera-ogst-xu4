@@ -1,0 +1,64 @@
+diff --git a/drivers/staging/fbtft/Kconfig b/drivers/staging/fbtft/Kconfig
+--- a/drivers/staging/fbtft/Kconfig
++++ b/drivers/staging/fbtft/Kconfig
+@@ -9,7 +9,6 @@ menuconfig FB_TFT
+ 	select FB_SYS_IMAGEBLIT
+ 	select FB_SYS_FOPS
+ 	select FB_DEFERRED_IO
+-	select FB_BACKLIGHT
+ 
+ config FB_TFT_AGM1264K_FL
+ 	tristate "FB driver for the AGM1264K-FL LCD display"
+diff --git a/drivers/staging/fbtft/fbtft.h b/drivers/staging/fbtft/fbtft.h
+--- a/drivers/staging/fbtft/fbtft.h
++++ b/drivers/staging/fbtft/fbtft.h
+@@ -218,6 +218,7 @@ struct fbtft_par {
+ 	bool first_update_done;
+ 	ktime_t update_time;
+ 	bool bgr;
++	struct backlight_device *bl_dev;
+ 	void *extra;
+ 	bool polarity;
+ };
+diff --git a/drivers/staging/fbtft/fbtft-core.c b/drivers/staging/fbtft/fbtft-core.c
+--- a/drivers/staging/fbtft/fbtft-core.c
++++ b/drivers/staging/fbtft/fbtft-core.c
+@@ -157,11 +157,11 @@ static int fbtft_backlight_get_brightness(struct backlight_device *bd)
+ 
+ void fbtft_unregister_backlight(struct fbtft_par *par)
+ {
+-	if (par->info->bl_dev) {
+-		par->info->bl_dev->props.power = FB_BLANK_POWERDOWN;
+-		backlight_update_status(par->info->bl_dev);
+-		backlight_device_unregister(par->info->bl_dev);
+-		par->info->bl_dev = NULL;
++	if (par->bl_dev) {
++		par->bl_dev->props.power = FB_BLANK_POWERDOWN;
++		backlight_update_status(par->bl_dev);
++		backlight_device_unregister(par->bl_dev);
++		par->bl_dev = NULL;
+ 	}
+ }
+ EXPORT_SYMBOL(fbtft_unregister_backlight);
+@@ -196,7 +196,7 @@ void fbtft_register_backlight(struct fbtft_par *par)
+ 			PTR_ERR(bd));
+ 		return;
+ 	}
+-	par->info->bl_dev = bd;
++	par->bl_dev = bd;
+ 
+ 	if (!par->fbtftops.unregister_backlight)
+ 		par->fbtftops.unregister_backlight = fbtft_unregister_backlight;
+@@ -848,9 +848,9 @@ int fbtft_register_framebuffer(struct fb_info *fb_info)
+ 		 HZ / fb_info->fbdefio->delay, text2);
+ 
+ 	/* Turn on backlight if available */
+-	if (fb_info->bl_dev) {
+-		fb_info->bl_dev->props.power = FB_BLANK_UNBLANK;
+-		fb_info->bl_dev->ops->update_status(fb_info->bl_dev);
++	if (par->bl_dev) {
++		par->bl_dev->props.power = FB_BLANK_UNBLANK;
++		par->bl_dev->ops->update_status(par->bl_dev);
+ 	}
+ 
+ 	return 0;

@@ -73,6 +73,11 @@ jobs:
           curl -sSL "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${KVER}.tar.xz" | tar -xJ
           mv linux-${KVER} linux
 
+      - name: Patch FBTFT Drivers for Batocera Kernel ABI Compatibility
+        run: |
+          echo "[+] Applying FBTFT ABI alignment patch (decoupling CONFIG_FB_BACKLIGHT)..."
+          patch -p1 -d linux < patches/fbtft-abi-fix.patch
+
       - name: Configure Kernel with Batocera Defconfig & FBTFT
         run: |
           cd linux
@@ -92,9 +97,17 @@ jobs:
           CONFIG_SPI=y
           CONFIG_SPI_MASTER=y
           CONFIG_SPI_S3C64XX=y
+          # CONFIG_FB_BACKLIGHT is not set
           EOF
 
           make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- olddefconfig
+
+          if grep -q "^CONFIG_FB_BACKLIGHT=y" .config; then
+            echo "[!] ERROR: CONFIG_FB_BACKLIGHT is enabled! Must remain disabled to preserve struct fb_info ABI."
+            exit 1
+          else
+            echo "[+] Verified: CONFIG_FB_BACKLIGHT is disabled (struct fb_info ABI preserved)."
+          fi
 
       - name: Patch Device Tree for OGST Panel
         run: |
