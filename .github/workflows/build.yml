@@ -97,14 +97,16 @@ jobs:
           cat dts/ogst-overlay.dtsi >> "$DTS_FILE"
 
       - name: Compile Modules & Device Tree
+        env:
+          KBUILD_MODPOST_WARN: "1"
         run: |
           cd linux
-          echo "[+] Compiling FBTFT modules..."
-          make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) modules_prepare
-          make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) M=drivers/staging/fbtft
-
           echo "[+] Compiling Device Tree Blob..."
           make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- samsung/exynos5422-odroidxu4.dtb
+
+          echo "[+] Compiling FBTFT modules with KBUILD_MODPOST_WARN=1..."
+          make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) modules_prepare
+          make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) M=drivers/staging/fbtft KBUILD_MODPOST_WARN=1
 
       - name: Verify & Collect Build Artifacts
         run: |
@@ -158,6 +160,8 @@ jobs:
             ```
           draft: false
           prerelease: false
+          overwrite: true
+          make_latest: true
           files: |
             batocera-ogst-xu4-v${{ steps.detect_kernel.outputs.kernel_version }}.tar.gz
             batocera-ogst-xu4-latest.tar.gz
