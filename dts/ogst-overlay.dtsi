@@ -18,13 +18,13 @@
 		bgr;
 		fps = <30>;
 		buswidth = <8>;
-		reset-gpios = <&gpx1 5 0>;
-		dc-gpios    = <&gpx1 6 0>;
-		led-gpios   = <&gpx1 2 1>;
+		reset-gpios = <&gpx1 5 1>; /* Active LOW (ILI9340 RESET# is active low) */
+		dc-gpios    = <&gpx1 6 0>; /* Active HIGH (0 = Cmd, 1 = Data) */
+		led-gpios   = <&gpx1 2 0>; /* Active HIGH (High turns on backlight transistor) */
 
 		controller-data {
 			cs-gpio = <&gpa2 5 0>;
-			samsung,spi-feedback-delay = <0>;
+			samsung,spi-feedback-delay = <1>;
 		};
 	};
 };

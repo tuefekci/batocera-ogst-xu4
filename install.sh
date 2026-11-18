@@ -120,7 +120,7 @@ fi
 echo -e "${YELLOW}[4/6] Configuring /userdata/system/ogst_display.py...${NC}"
 chmod +x /userdata/system/ogst_display.py
 
-echo -e "${YELLOW}[5/6] Setting up boot script /userdata/system/custom.sh...${NC}"
+echo -e "${YELLOW}[5/6] Setting up boot script & system service...${NC}"
 cat << 'EOF' > /userdata/system/custom.sh
 #!/bin/bash
 
@@ -145,6 +145,12 @@ done
 python3 /userdata/system/ogst_display.py daemon &
 EOF
 chmod 755 /userdata/system/custom.sh
+
+# Batocera v43/v44+ service integration
+mkdir -p /userdata/system/services
+cp /userdata/system/custom.sh /userdata/system/services/custom_service
+chmod 755 /userdata/system/services/custom_service
+batocera-services enable custom_service 2>/dev/null || true
 
 echo -e "${YELLOW}[6/6] Installing EmulationStation event hook scripts...${NC}"
 cat << 'EOF' > "$ES_SCRIPTS/system-selected/ogst.sh"

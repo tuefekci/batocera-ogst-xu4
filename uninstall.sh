@@ -41,6 +41,10 @@ rm -f /userdata/system/configs/emulationstation/scripts/screensaver-start/ogst.s
 rm -f /userdata/system/scripts/ogst_game.sh
 rm -f /userdata/system/ogst_display.py
 
+# Clean services
+batocera-services disable custom_service 2>/dev/null || true
+rm -f /userdata/system/services/custom_service
+
 # Reset custom.sh
 if [ -f /userdata/system/custom.sh ]; then
     sed -i '/ogst/d' /userdata/system/custom.sh
