@@ -40,39 +40,46 @@ rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR" "$MODULES_DIR" "$ES_SCRIPTS/system-selected" "$ES_SCRIPTS/game-selected" "$ES_SCRIPTS/screensaver-start" /userdata/system/scripts
 
 echo -e "\n${YELLOW}[1/6] Fetching latest release from GitHub...${NC}"
-LATEST_URL=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep "browser_download_url.*batocera-ogst-xu4.*\.tar\.gz" | cut -d '"' -f 4)
+LATEST_URL="https://github.com/$REPO/releases/latest/download/batocera-ogst-xu4-latest.tar.gz"
 
-if [ -z "$LATEST_URL" ]; then
-    echo -e "${YELLOW}[!] No GitHub Release asset found yet. Downloading direct repository scripts...${NC}"
-    curl -sSL "https://raw.githubusercontent.com/$REPO/main/scripts/ogst_display.py" -o /userdata/system/ogst_display.py
-else
-    echo -e "${GREEN}[+] Downloading release archive: $LATEST_URL${NC}"
-    curl -sSL "$LATEST_URL" -o "$TMP_DIR/release.tar.gz"
-    tar -xzf "$TMP_DIR/release.tar.gz" -C "$TMP_DIR"
-
-    # Install Kernel Modules
-    if [ -f "$TMP_DIR/fbtft.ko" ] && [ -f "$TMP_DIR/fb_ili9340.ko" ]; then
-        echo -e "${YELLOW}[2/6] Installing kernel modules...${NC}"
-        cp "$TMP_DIR/fbtft.ko" "$MODULES_DIR/"
-        cp "$TMP_DIR/fb_ili9340.ko" "$MODULES_DIR/"
-        chmod 644 "$MODULES_DIR"/*.ko
+if ! curl -sSL --fail "$LATEST_URL" -o "$TMP_DIR/release.tar.gz"; then
+    echo -e "${YELLOW}[!] Direct release download failed, attempting API lookup...${NC}"
+    LATEST_URL=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep "browser_download_url.*batocera-ogst-xu4-latest\.tar\.gz" | head -n 1 | cut -d '"' -f 4)
+    if [ -n "$LATEST_URL" ]; then
+        curl -sSL "$LATEST_URL" -o "$TMP_DIR/release.tar.gz"
     fi
+fi
 
-    # Install Device Tree
-    if [ -f "$TMP_DIR/exynos5422-odroidxu4.dtb" ]; then
-        echo -e "${YELLOW}[3/6] Updating Device Tree in /boot...${NC}"
-        mount -o remount,rw /boot 2>/dev/null || true
-        if [ ! -f /boot/boot/exynos5422-odroidxu4.dtb.stock ]; then
-            cp /boot/boot/exynos5422-odroidxu4.dtb /boot/boot/exynos5422-odroidxu4.dtb.stock
-            echo -e "${GREEN}[+] Stock DTB backed up to /boot/boot/exynos5422-odroidxu4.dtb.stock${NC}"
-        fi
-        cp "$TMP_DIR/exynos5422-odroidxu4.dtb" /boot/boot/exynos5422-odroidxu4.dtb
-        mount -o remount,ro /boot 2>/dev/null || true
-    fi
+if [ ! -f "$TMP_DIR/release.tar.gz" ]; then
+    echo -e "${RED}[ERROR] Failed to download release archive from GitHub.${NC}"
+    exit 1
+fi
 
-    if [ -f "$TMP_DIR/ogst_display.py" ]; then
-        cp "$TMP_DIR/ogst_display.py" /userdata/system/ogst_display.py
+echo -e "${GREEN}[+] Unpacking release archive...${NC}"
+tar -xzf "$TMP_DIR/release.tar.gz" -C "$TMP_DIR"
+
+# Install Kernel Modules
+if [ -f "$TMP_DIR/fbtft.ko" ] && [ -f "$TMP_DIR/fb_ili9340.ko" ]; then
+    echo -e "${YELLOW}[2/6] Installing kernel modules...${NC}"
+    cp "$TMP_DIR/fbtft.ko" "$MODULES_DIR/"
+    cp "$TMP_DIR/fb_ili9340.ko" "$MODULES_DIR/"
+    chmod 644 "$MODULES_DIR"/*.ko
+fi
+
+# Install Device Tree
+if [ -f "$TMP_DIR/exynos5422-odroidxu4.dtb" ]; then
+    echo -e "${YELLOW}[3/6] Updating Device Tree in /boot...${NC}"
+    mount -o remount,rw /boot 2>/dev/null || true
+    if [ ! -f /boot/boot/exynos5422-odroidxu4.dtb.stock ]; then
+        cp /boot/boot/exynos5422-odroidxu4.dtb /boot/boot/exynos5422-odroidxu4.dtb.stock
+        echo -e "${GREEN}[+] Stock DTB backed up to /boot/boot/exynos5422-odroidxu4.dtb.stock${NC}"
     fi
+    cp "$TMP_DIR/exynos5422-odroidxu4.dtb" /boot/boot/exynos5422-odroidxu4.dtb
+    mount -o remount,ro /boot 2>/dev/null || true
+fi
+
+if [ -f "$TMP_DIR/ogst_display.py" ]; then
+    cp "$TMP_DIR/ogst_display.py" /userdata/system/ogst_display.py
 fi
 
 echo -e "${YELLOW}[4/6] Configuring /userdata/system/ogst_display.py...${NC}"
