@@ -31,6 +31,10 @@ if [ "$ARCH" != "armv7l" ]; then
     exit 1
 fi
 
+# Detect running kernel version
+LOCAL_KVER=$(uname -r | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' || uname -r | cut -d '-' -f 1)
+echo -e "${GREEN}[+] Detected running Batocera Linux kernel: ${YELLOW}$LOCAL_KVER${NC} ($(uname -r))"
+
 REPO="tuefekci/batocera-ogst-xu4"
 TMP_DIR="/tmp/ogst_install"
 MODULES_DIR="/userdata/system/modules"
@@ -39,19 +43,50 @@ ES_SCRIPTS="/userdata/system/configs/emulationstation/scripts"
 rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR" "$MODULES_DIR" "$ES_SCRIPTS/system-selected" "$ES_SCRIPTS/game-selected" "$ES_SCRIPTS/screensaver-start" /userdata/system/scripts
 
-echo -e "\n${YELLOW}[1/6] Fetching latest release from GitHub...${NC}"
-LATEST_URL="https://github.com/$REPO/releases/latest/download/batocera-ogst-xu4-latest.tar.gz"
+echo -e "\n${YELLOW}[1/6] Searching for matching kernel drivers (v${LOCAL_KVER})...${NC}"
 
-if ! curl -sSL --fail "$LATEST_URL" -o "$TMP_DIR/release.tar.gz"; then
-    echo -e "${YELLOW}[!] Direct release download failed, attempting API lookup...${NC}"
-    LATEST_URL=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep "browser_download_url.*batocera-ogst-xu4-latest\.tar\.gz" | head -n 1 | cut -d '"' -f 4)
-    if [ -n "$LATEST_URL" ]; then
-        curl -sSL "$LATEST_URL" -o "$TMP_DIR/release.tar.gz"
+TARGET_URL="https://github.com/$REPO/releases/download/v${LOCAL_KVER}/batocera-ogst-xu4-v${LOCAL_KVER}.tar.gz"
+
+DOWNLOAD_SUCCESS=0
+if curl -sSL --fail "$TARGET_URL" -o "$TMP_DIR/release.tar.gz" 2>/dev/null; then
+    echo -e "${GREEN}[+] Found exact driver match for kernel v${LOCAL_KVER}!${NC}"
+    DOWNLOAD_SUCCESS=1
+else
+    # Try latest release if it matches the current kernel
+    LATEST_JSON=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null || true)
+    LATEST_TAG=$(echo "$LATEST_JSON" | grep '"tag_name":' | cut -d '"' -f 4 || true)
+    
+    if [ "$LATEST_TAG" = "v${LOCAL_KVER}" ]; then
+        LATEST_URL="https://github.com/$REPO/releases/latest/download/batocera-ogst-xu4-latest.tar.gz"
+        if curl -sSL --fail "$LATEST_URL" -o "$TMP_DIR/release.tar.gz" 2>/dev/null; then
+            echo -e "${GREEN}[+] Found matching latest release ($LATEST_TAG)!${NC}"
+            DOWNLOAD_SUCCESS=1
+        fi
     fi
 fi
 
-if [ ! -f "$TMP_DIR/release.tar.gz" ]; then
-    echo -e "${RED}[ERROR] Failed to download release archive from GitHub.${NC}"
+if [ "$DOWNLOAD_SUCCESS" -ne 1 ]; then
+    RELEASES_LIST=$(curl -s "https://api.github.com/repos/$REPO/releases" 2>/dev/null | grep '"tag_name":' | cut -d '"' -f 4 | tr '\n' ' ' || true)
+    
+    echo -e "\n${RED}=====================================================${NC}"
+    echo -e "${RED}[ERROR] Incompatible Batocera Kernel Version!${NC}"
+    echo -e "${RED}=====================================================${NC}"
+    echo -e "Your Odroid XU4 is currently running: ${YELLOW}Linux $LOCAL_KVER${NC}"
+    if [ -n "$RELEASES_LIST" ]; then
+        echo -e "Available compiled driver versions:   ${GREEN}$RELEASES_LIST${NC}"
+    fi
+    echo -e "\nKernel display modules (.ko) must strictly match your running kernel."
+    echo -e "No matching precompiled driver was found for version ${YELLOW}$LOCAL_KVER${NC}."
+    echo -e "\n${BLUE}[ACTION REQUIRED]${NC}"
+    echo -e "Please update Batocera to the latest version before installing the display drivers:"
+    echo -e "  1. On your controller, open the Batocera Main Menu (START / Space)"
+    echo -e "  2. Navigate to:  ${YELLOW}System Settings -> Updates & Downloads${NC}"
+    echo -e "  3. Select ${YELLOW}START UPDATE${NC} and wait for the system to reboot"
+    echo -e "  4. Once updated, run this installer command again."
+    echo -e "\nAlternatively, you can trigger a build for kernel $LOCAL_KVER via GitHub Actions:"
+    echo -e "  ${BLUE}https://github.com/$REPO/actions/workflows/build.yml${NC}"
+    echo -e "${RED}=====================================================${NC}\n"
+    rm -rf "$TMP_DIR"
     exit 1
 fi
 

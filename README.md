@@ -40,6 +40,17 @@ reboot
 
 ---
 
+## 🛡️ Smart Kernel Version Matching
+
+Linux kernel modules (`.ko`) strictly require matching kernel headers (`vermagic`). Loading mismatched kernel drivers can cause instability or kernel panics.
+
+The `install.sh` script automatically:
+1. **Inspects your running kernel** via `uname -r` on the Odroid XU4.
+2. **Searches published GitHub Releases** for drivers built specifically for your exact kernel version.
+3. **Guards against mismatches**: If you are running an older Batocera release for which no driver build exists, the installer will **halt safely** and guide you to update Batocera first via `System Settings -> Updates & Downloads`.
+
+---
+
 ## Features
 
 * **Live Telemetry Mode (Idle)**:
