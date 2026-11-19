@@ -54,14 +54,15 @@ The `install.sh` script automatically:
 ## Features
 
 * **Live Telemetry Mode (Idle)**:
-  After 20 seconds of inactivity in EmulationStation, the front screen displays:
-  * Network IP Address & local time
-  * CPU & GPU thermal zone readings
-  * CPU clock speed (MHz)
-  * External / internal storage free space
-* **Active Artwork Mode**:
-  * Browsing games in EmulationStation renders high-resolution boxart, marquees, or screenshots directly onto the LCD.
-  * Launching a game freezes the active game art on the screen during gameplay until you exit back to the menu.
+  When idle in EmulationStation, the front screen alternates every 10 seconds between:
+  * Full System Dashboard (IP, CPU/GPU thermals, 8-core CPU frequency, RAM, storage, clock)
+  * Last Played Game / Console Hardware Showcase
+* **Active In-Game Mode (10-Second Screen Rotation)**:
+  While playing games, the display automatically cycles every 10 seconds through 4 dedicated screens:
+  1. **Cover Art / Boxart**: High-resolution front boxart cleanly fitted to 320x240 RGB565 via NumPy/PIL.
+  2. **Game Title & Marquee**: Arcade wheel logo, developer studio, release year, genre, and platform badge.
+  3. **Console Hardware Showcase**: 3D console hardware render from the active Batocera theme.
+  4. **Live In-Game Telemetry**: Real-time play session stopwatch, Cortex-A15 big core clocks, CPU/GPU thermals, and RAM usage.
 * **Safe / Non-Destructive**:
   * Your original stock Device Tree is automatically backed up to `/boot/boot/exynos5422-odroidxu4.dtb.stock`.
   * Zero changes to your ROMs, BIOS files, save states, or emulator configs.

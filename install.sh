@@ -171,15 +171,12 @@ EOF
 
 cat << 'EOF' > /userdata/system/scripts/ogst_game.sh
 #!/bin/bash
-mkdir -p /tmp/ogst
 case "$1" in
     gameStart)
-        touch /tmp/ogst/in_game
-        python3 /userdata/system/ogst_display.py art "$2" "$5" &
+        python3 /userdata/system/ogst_display.py game_start "$2" "$3" "$5" &
         ;;
     gameStop)
-        rm -f /tmp/ogst/in_game
-        date +%s > /tmp/ogst/last_activity
+        python3 /userdata/system/ogst_display.py game_stop &
         ;;
 esac
 EOF
